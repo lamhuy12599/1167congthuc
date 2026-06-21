@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>7-Eleven - Menu Công Thức</title>
+    
+    <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/4/40/7-eleven_logo.svg" type="image/svg+xml">
+    
+    <style>
+        /* CSS Reset & Font hệ thống */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+        
+        :root {
+            --7e-green: #008062;
+            --7e-orange: #F37021;
+            --7e-red: #E2231A;
+            --bg-main: #F4F5F7;
+            --bg-card: #ffffff;
+            --text-main: #333;
+            --border-color: #e0e0e0;
+        }
+
+        body { 
+            background-color: var(--bg-main); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            padding: 20px; 
+        }
+        
+        /* Khung chứa Webapp - Đồng bộ form mẫu của bạn */
+        .menu-container { 
+            width: 100%; 
+            max-width: 480px; /* Tăng nhẹ để lưới nút bấm hiển thị thoải mái */
+            background: var(--bg-card); 
+            border-radius: 20px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+            padding: 35px 22px; 
+            text-align: center; 
+            position: relative; 
+            overflow: hidden; 
+        }
+        
+        /* Dải màu đặc trưng 7-Eleven ở đỉnh Card */
+        .menu-container::before { 
+            content: ''; 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 8px; 
+            background: linear-gradient(to right, var(--7e-green) 33%, var(--7e-red) 33%, var(--7e-red) 66%, var(--7e-orange) 66%); 
+        }
+
+        .logo { height: 55px; margin-bottom: 15px; }
+        
+        h1 { 
+            color: var(--7e-green); 
+            font-size: 22px; 
+            font-weight: 800; 
+            margin-bottom: 8px; 
+            letter-spacing: 0.5px;
+        }
+        
+        p.subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+
+        /* --- LƯỚI NÚT BẤM CHỌN MÓN (MỚI) --- */
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); /* Tự động chia cột theo màn hình */
+            gap: 10px;
+            margin-bottom: 20px;
+            max-height: 260px; /* Giới hạn chiều cao vùng chọn món nếu quá nhiều món */
+            overflow-y: auto; /* Tạo thanh cuộn mượt nếu danh sách món dài */
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            background: #fafafa;
+        }
+
+        /* Style của từng nút bấm tên món */
+        .product-btn {
+            background: #ffffff;
+            border: 2px solid var(--border-color);
+            padding: 12px 8px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            min-height: 50px;
+        }
+
+        .product-btn:hover {
+            border-color: var(--7e-green);
+            transform: translateY(-2px);
+        }
+
+        /* Trạng thái nút khi được nhấn chọn */
+        .product-btn.active {
+            background: var(--7e-green);
+            border-color: var(--7e-green);
+            color: #ffffff;
+            box-shadow: 0 4px 10px rgba(0, 128, 98, 0.2);
+        }
+
+        /* Trạng thái Loading */
+        .loading {
+            font-size: 13px;
+            color: #888;
+            font-style: italic;
+            padding: 10px 0;
+        }
+
+        /* --- KHU VỰC HIỂN THỊ CÔNG THỨC (RESULT CARD) --- */
+        .recipe-card {
+            display: none; 
+            text-align: left;
+            margin-top: 25px;
+            border-top: 2px dashed var(--border-color);
+            padding-top: 20px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .product-title {
+            color: var(--7e-green);
+            font-size: 19px;
+            font-weight: 800;
+            margin-bottom: 18px;
+            text-align: center;
+            background: #e6f2ef;
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .section-header {
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin: 18px 0 8px 0;
+        }
+        .sh-green { color: var(--7e-green); }
+        .sh-orange { color: var(--7e-orange); }
+        .sh-red { color: var(--7e-red); }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .full-width { grid-column: span 2; }
+
+        .info-box {
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+        }
+        
+        .box-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: #777;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .box-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-main);
+            line-height: 1.4;
+        }
+
+        .box-green { background: #e6f2ef; border-color: #cce6df; }
+        .box-orange { background: #fff0e6; border-color: #ffd6cc; }
+        .box-red { background: #fdeae8; border-color: #f9c2bd; }
+
+        .recipe-box {
+            background: #fafafa;
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 15px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #444;
+            white-space: pre-line;
+        }
+
+        .footer {
+            margin-top: 35px;
+            font-size: 12px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="menu-container">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/4/40/7-eleven_logo.svg" alt="7-Eleven Logo" class="logo">
+        
+        <h1>DANH MỤC CÔNG THỨC</h1>
+        <p class="subtitle">Bấm trực tiếp vào tên món để xem cách pha</p>
+        
+        <div id="buttons-container" class="buttons-grid">
+            </div>
+        
+        <div id="loading-status" class="loading">Đang kết nối cơ sở dữ liệu Google Sheets...</div>
+        
+        <div id="recipe-result" class="recipe-card">
+            <div id="view-product_name" class="product-title"></div>
+            
+            <div class="section-header sh-green">● Thành Phần Nền</div>
+            <div class="info-grid">
+                <div class="info-box box-green">
+                    <div class="box-title">Loại Trà / Syrup</div>
+                    <div id="view-category" class="box-value"></div>
+                </div>
+                <div class="info-box box-green">
+                    <div class="box-title">Base Nền</div>
+                    <div id="view-base_tea" class="box-value"></div>
+                </div>
+            </div>
+            
+            <div class="section-header sh-green">● Hướng dẫn pha chế chi tiết</div>
+            <div id="view-recipe_steps" class="recipe-box"></div>
+            
+            <div class="section-header sh-orange">● Quy cách & Định lượng ly</div>
+            <div class="info-grid">
+                <div class="info-box box-orange">
+                    <div class="box-title">Dung tích & Size Ly</div>
+                    <div id="view-volume_details" class="box-value"></div>
+                </div>
+                <div class="info-box box-orange">
+                    <div class="box-title">Định mức trên ly</div>
+                    <div id="view-standard_dosage" class="box-value"></div>
+                </div>
+                <div class="info-box box-orange full-width">
+                    <div class="box-title">Topping mặc định</div>
+                    <div id="view-default_topping" class="box-value"></div>
+                </div>
+            </div>
+            
+            <div class="section-header sh-red">● Hạn sử dụng tiêu chuẩn (HSD)</div>
+            <div class="info-grid">
+                <div class="info-box box-red">
+                    <div class="box-title">HSD Cốt Trà</div>
+                    <div id="view-shelf_life_base" class="box-value" style="color: var(--7e-red);"></div>
+                </div>
+                <div class="info-box box-red">
+                    <div class="box-title">HSD Trưng bày OSC</div>
+                    <div id="view-shelf_life_osc" class="box-value" style="color: var(--7e-red);"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            &copy; 2026 Smart Tools System
+        </div>
+    </div>
+
+    <script>
+        // ================================================================
+        // CHÈN ĐƯỜNG LINK WEB APP GOOGLE APPS SCRIPT CỦA BẠN VÀO ĐÂY:
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzhqNGoY_UZXCIxy516WciQ64y6SZcUcVqZ_omglHMqy2BOtODXJ_yTYaVoFK3H582JMg/exec";
+        // ================================================================
+        
+        let dbData = [];
+        
+        document.addEventListener("DOMContentLoaded", function() {
+            // Tải dữ liệu từ Apps Script API
+            fetch(GAS_API_URL)
+                .then(response => response.json())
+                .then(data => onDatabaseLoadSuccess(data))
+                .catch(err => onDatabaseLoadFailure(err));
+        });
+        
+        function onDatabaseLoadSuccess(data) {
+            if(data.error) {
+                showStatus("Lỗi cấu hình bảng tính: " + data.error);
+                return;
+            }
+            dbData = data;
+            
+            const btnContainer = document.getElementById('buttons-container');
+            btnContainer.innerHTML = ""; // Xóa dữ liệu cũ
+            
+            // Tự động tạo nút bấm tương ứng với từng dòng sản phẩm trong file Excel
+            dbData.forEach(item => {
+                if(item.product_name) {
+                    let btn = document.createElement('button');
+                    btn.className = 'product-btn';
+                    btn.innerText = item.product_name;
+                    
+                    // Gắn sự kiện click cho nút bấm
+                    btn.addEventListener('click', function() {
+                        selectProduct(item, btn);
+                    });
+                    
+                    btnContainer.appendChild(btn);
+                }
+            });
+            
+            showStatus("Dữ liệu món quầy bar đã sẵn sàng.");
+            setTimeout(() => { document.getElementById('loading-status').style.display = 'none'; }, 1500);
+        }
+        
+        function onDatabaseLoadFailure(err) {
+            showStatus("Lỗi tải data! Kiểm tra mạng hoặc phân quyền API.");
+            console.error(err);
+        }
+        
+        function showStatus(msg) {
+            document.getElementById('loading-status').innerText = msg;
+            document.getElementById('loading-status').style.display = 'block';
+        }
+        
+        // Hàm xử lý hiển thị dữ liệu khi click vào nút món nước
+        function selectProduct(match, clickedBtn) {
+            // 1. Reset màu tất cả các nút khác, chỉ làm nổi bật nút vừa bấm (đổi sang màu xanh 7-Eleven)
+            const allButtons = document.querySelectorAll('.product-btn');
+            allButtons.forEach(btn => btn.classList.remove('active'));
+            clickedBtn.classList.add('active');
+            
+            // 2. Đổ dữ liệu công thức của món đó vào khung hiển thị
+            document.getElementById('view-product_name').innerText = match.product_name || "-";
+            document.getElementById('view-category').innerText = match.category || "-";
+            document.getElementById('view-base_tea').innerText = match.base_tea || "-";
+            document.getElementById('view-recipe_steps').innerText = match.recipe_steps || "Chưa nhập hướng dẫn pha chế.";
+            document.getElementById('view-volume_details').innerText = match.volume_details || "-";
+            document.getElementById('view-standard_dosage').innerText = match.standard_dosage || "-";
+            document.getElementById('view-default_topping').innerText = match.default_topping || "Không có topping mặc định.";
+            document.getElementById('view-shelf_life_base').innerText = match.shelf_life_base || "-";
+            document.getElementById('view-shelf_life_osc').innerText = match.shelf_life_osc || "-";
+            
+            // 3. Hiện khối kết quả công thức
+            const resultCard = document.getElementById('recipe-result');
+            resultCard.style.display = 'block';
+            
+            // Mẹo nhỏ: Tự động cuộn màn hình xuống vùng công thức mượt mà khi bấm chọn trên điện thoại
+            resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    </script>
+</body>
+</html>
