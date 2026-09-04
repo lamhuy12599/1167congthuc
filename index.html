@@ -4,24 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>7-Eleven - Menu Công Thức - Liquid Glass</title>
-    
+
     <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/4/40/7-eleven_logo.svg" type="image/svg+xml">
-    
+
     <style>
         /* --- Nền Liquid Glass & Hiệu ứng Apple --- */
+        * { box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             min-height: 100vh;
             margin: 0;
             padding: 20px;
-            box-sizing: border-box;
 
-            /* Nền gradient tâm ra, xanh lá pastel sang vàng pastel */
             background: radial-gradient(circle, #E0F7FA 0%, #FFFDE7 100%);
-            /* Hiệu ứng kính làm mờ nhẹ lớp nền phía sau */
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
         }
@@ -30,22 +28,20 @@
         .menu-container {
             width: 100%;
             max-width: 480px;
-            border-radius: 30px; /* Bo góc lớn sang trọng theo chuẩn Apple */
-            
-            /* Nền kính bán trong suốt & Hiệu ứng đổ bóng mịn */
+            border-radius: 30px;
+
             background: rgba(255, 255, 255, 0.45);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.25);
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
-            
+
             padding: 40px 25px;
             text-align: center;
             position: relative;
             overflow: hidden;
         }
 
-        /* Dải màu đặc trưng 7-Eleven - Điều chỉnh opacity để tệp với hiệu ứng kính */
         .menu-container::before {
             content: '';
             position: absolute;
@@ -55,12 +51,12 @@
             opacity: 0.85;
         }
 
-        .logo { 
-            height: 60px; 
-            margin-bottom: 20px; 
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.06)); 
+        .logo {
+            height: 60px;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.06));
         }
-        
+
         h1 {
             color: #008062;
             font-size: 24px;
@@ -68,12 +64,58 @@
             margin-bottom: 10px;
             letter-spacing: 0.5px;
         }
-        
+
         p.subtitle {
             color: #555;
             font-size: 15px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
+
+        /* --- Thanh công cụ: tìm kiếm + thêm mới --- */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .search-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 14px;
+            padding: 10px 14px;
+        }
+        .search-box svg { flex-shrink: 0; opacity: 0.5; }
+        .search-box input {
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 14px;
+            width: 100%;
+            color: #333;
+        }
+
+        .btn-icon {
+            border: none;
+            border-radius: 14px;
+            width: 42px;
+            height: 42px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-add {
+            background: rgba(0, 128, 98, 0.85);
+            color: #fff;
+            box-shadow: 0 4px 10px rgba(0, 128, 98, 0.25);
+        }
+        .btn-add:hover { background: #006e50; transform: translateY(-1px); }
 
         /* --- LƯỚI NÚT BẤM CHỌN MÓN --- */
         .buttons-grid {
@@ -84,12 +126,11 @@
             max-height: 280px;
             overflow-y: auto;
             padding: 10px;
-            background: rgba(255, 255, 255, 0.2); 
+            background: rgba(255, 255, 255, 0.2);
             border-radius: 20px;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        /* Style nút bấm - Hiệu ứng Liquid Glass */
         .product-btn {
             background: rgba(255, 255, 255, 0.5);
             backdrop-filter: blur(5px);
@@ -116,7 +157,6 @@
             box-shadow: 0 6px 12px rgba(0,0,0,0.06);
         }
 
-        /* Trạng thái nút khi được chọn - Xanh ngọc pastel dịu mắt */
         .product-btn.active {
             background: rgba(0, 128, 98, 0.25);
             border-color: rgba(0, 128, 98, 0.4);
@@ -125,7 +165,13 @@
             box-shadow: 0 4px 12px rgba(0, 128, 98, 0.12);
         }
 
-        /* Trạng thái Loading */
+        .empty-hint {
+            grid-column: 1 / -1;
+            font-size: 13px;
+            color: #777;
+            padding: 10px;
+        }
+
         .loading {
             font-size: 14px;
             color: #666;
@@ -135,12 +181,12 @@
 
         /* --- KHU VỰC HIỂN THỊ CÔNG THỨC (RESULT CARD) --- */
         .recipe-card {
-            display: none; 
+            display: none;
             text-align: left;
             margin-top: 30px;
             border-top: 1px solid rgba(255, 255, 255, 0.3);
             padding-top: 25px;
-            animation: fadeIn 0.5s ease-out;
+            animation: fadeIn 0.4s ease-out;
         }
 
         @keyframes fadeIn {
@@ -148,17 +194,35 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
+        .card-head {
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
         .product-title {
+            flex: 1;
             color: #008062;
             font-size: 20px;
             font-weight: 800;
-            margin-bottom: 20px;
             text-align: center;
             background: rgba(0, 128, 98, 0.08);
             padding: 12px;
             border-radius: 14px;
             border: 1px solid rgba(0, 128, 98, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
+
+        .btn-edit, .btn-delete {
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #555;
+        }
+        .btn-edit:hover { background: rgba(0, 128, 98, 0.15); color: #008062; }
+        .btn-delete:hover { background: rgba(226, 35, 26, 0.15); color: #E2231A; }
 
         .section-header {
             font-size: 13px;
@@ -186,7 +250,7 @@
             -webkit-backdrop-filter: blur(5px);
             box-shadow: 0 2px 6px rgba(0,0,0,0.02);
         }
-        
+
         .box-title {
             font-size: 11px;
             font-weight: 700;
@@ -202,7 +266,6 @@
             line-height: 1.5;
         }
 
-        /* Màu nền các Card thông tin đổ theo tone màu chủ đạo nhạt (Pastel) */
         .box-green { background: rgba(0, 128, 98, 0.06); border-color: rgba(0, 128, 98, 0.12); }
         .box-orange { background: rgba(243, 112, 33, 0.06); border-color: rgba(243, 112, 33, 0.12); }
         .box-red { background: rgba(226, 35, 26, 0.06); border-color: rgba(226, 35, 26, 0.12); }
@@ -224,23 +287,162 @@
             font-size: 13px;
             color: #777;
         }
+
+        /* --- MODAL CHỈNH SỬA / THÊM MỚI --- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(20, 40, 35, 0.35);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.open { display: flex; }
+
+        .modal-box {
+            width: 100%;
+            max-width: 440px;
+            max-height: 88vh;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+            padding: 26px 22px;
+            animation: fadeIn 0.25s ease-out;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: #008062;
+            margin-bottom: 18px;
+            text-align: center;
+        }
+
+        .field {
+            margin-bottom: 14px;
+            text-align: left;
+        }
+        .field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 6px;
+        }
+        .field input, .field textarea {
+            width: 100%;
+            padding: 11px 12px;
+            border-radius: 12px;
+            border: 1px solid #dcdcdc;
+            font-size: 14px;
+            font-family: inherit;
+            background: #fff;
+            color: #222;
+            outline: none;
+        }
+        .field input:focus, .field textarea:focus {
+            border-color: #008062;
+            box-shadow: 0 0 0 3px rgba(0,128,98,0.12);
+        }
+        .field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-main {
+            flex: 1;
+            border: none;
+            border-radius: 14px;
+            padding: 13px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-save { background: #008062; color: #fff; }
+        .btn-save:hover { background: #006e50; }
+        .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-cancel { background: #eee; color: #444; }
+        .btn-cancel:hover { background: #e2e2e2; }
+
+        .confirm-box {
+            width: 100%;
+            max-width: 340px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 22px;
+            padding: 26px 22px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+            animation: fadeIn 0.25s ease-out;
+        }
+        .confirm-box p { color: #333; font-size: 15px; margin-bottom: 20px; }
+
+        /* --- TOAST THÔNG BÁO --- */
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 24px;
+            transform: translateX(-50%) translateY(20px);
+            background: rgba(30,30,30,0.9);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 200;
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .toast.error { background: rgba(226, 35, 26, 0.92); }
     </style>
 </head>
 <body>
 
     <div class="menu-container">
         <img src="https://upload.wikimedia.org/wikipedia/commons/4/40/7-eleven_logo.svg" alt="7-Eleven Logo" class="logo">
-        
+
         <h1>DANH MỤC CÔNG THỨC</h1>
         <p class="subtitle">Bấm vào tên món để xem cách pha</p>
-        
+
+        <div class="toolbar">
+            <div class="search-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="search-input" placeholder="Tìm món...">
+            </div>
+            <button class="btn-icon btn-add" id="btn-add-new" title="Thêm món mới">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+        </div>
+
         <div id="buttons-container" class="buttons-grid"></div>
-        
+
         <div id="loading-status" class="loading">Đang kết nối cơ sở dữ liệu...</div>
-        
+
         <div id="recipe-result" class="recipe-card">
-            <div id="view-product_name" class="product-title"></div>
-            
+            <div class="card-head">
+                <div id="view-product_name" class="product-title"></div>
+                <button class="btn-icon btn-edit" id="btn-edit" title="Chỉnh sửa">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+                </button>
+                <button class="btn-icon btn-delete" id="btn-delete" title="Xoá">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
+            </div>
+
             <div class="section-header sh-green">● Thành Phần Nền</div>
             <div class="info-grid">
                 <div class="info-box box-green">
@@ -252,10 +454,10 @@
                     <div id="view-base_tea" class="box-value"></div>
                 </div>
             </div>
-            
+
             <div class="section-header sh-green">● Hướng dẫn pha chế chi tiết</div>
             <div id="view-recipe_steps" class="recipe-box"></div>
-            
+
             <div class="section-header sh-orange">● Quy cách & Định lượng ly</div>
             <div class="info-grid">
                 <div class="info-box box-orange">
@@ -271,7 +473,7 @@
                     <div id="view-default_topping" class="box-value"></div>
                 </div>
             </div>
-            
+
             <div class="section-header sh-red">● Hạn sử dụng tiêu chuẩn (HSD)</div>
             <div class="info-grid">
                 <div class="info-box box-red">
@@ -290,67 +492,171 @@
         </div>
     </div>
 
+    <!-- MODAL: Thêm / Sửa công thức -->
+    <div class="modal-overlay" id="edit-modal">
+        <div class="modal-box">
+            <div class="modal-title" id="modal-title">Chỉnh sửa công thức</div>
+            <form id="edit-form">
+                <div class="field">
+                    <label>Tên món</label>
+                    <input type="text" id="f-product_name" required>
+                </div>
+                <div class="field">
+                    <label>Loại Trà / Syrup</label>
+                    <input type="text" id="f-category">
+                </div>
+                <div class="field">
+                    <label>Base Nền</label>
+                    <input type="text" id="f-base_tea">
+                </div>
+                <div class="field">
+                    <label>Hướng dẫn pha chế</label>
+                    <textarea id="f-recipe_steps"></textarea>
+                </div>
+                <div class="field">
+                    <label>Dung tích & Size Ly</label>
+                    <input type="text" id="f-volume_details">
+                </div>
+                <div class="field">
+                    <label>Định mức trên ly</label>
+                    <input type="text" id="f-standard_dosage">
+                </div>
+                <div class="field">
+                    <label>Topping mặc định</label>
+                    <input type="text" id="f-default_topping">
+                </div>
+                <div class="field">
+                    <label>HSD Cốt Trà</label>
+                    <input type="text" id="f-shelf_life_base">
+                </div>
+                <div class="field">
+                    <label>HSD Trưng bày OSC</label>
+                    <input type="text" id="f-shelf_life_osc">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-main btn-cancel" id="btn-cancel-edit">Huỷ</button>
+                    <button type="submit" class="btn-main btn-save" id="btn-save-edit">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Xác nhận xoá -->
+    <div class="modal-overlay" id="confirm-modal">
+        <div class="confirm-box">
+            <p id="confirm-text">Bạn có chắc muốn xoá món này?</p>
+            <div class="modal-actions">
+                <button type="button" class="btn-main btn-cancel" id="btn-cancel-delete">Huỷ</button>
+                <button type="button" class="btn-main btn-save" id="btn-confirm-delete" style="background:#E2231A;">Xoá</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
     <script>
         // ================================================================
         // LINK WEB APP GOOGLE APPS SCRIPT
-        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzhqNGoY_UZXCIxy516WciQ64y6SZcUcVqZ_omglHMqy2BOtODXJ_yTYaVoFK3H582JMg/exec";
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwC5rmETmJNkvDkzjKphk-ZGHr_l6gUVPwOpEKl2PaNsBl3HfX_x6yWd6-4CWXPKDggXA/exec";
         // ================================================================
-        
+
+        const FIELDS = ["product_name","category","base_tea","recipe_steps","volume_details",
+                         "standard_dosage","default_topping","shelf_life_base","shelf_life_osc"];
+
         let dbData = [];
-        
+        let currentItem = null;   // món đang xem chi tiết
+        let editingItem = null;   // null = đang thêm mới; object = đang sửa
+
         document.addEventListener("DOMContentLoaded", function() {
-            // Tải dữ liệu từ Apps Script API
+            loadData();
+
+            document.getElementById('search-input').addEventListener('input', renderButtons);
+            document.getElementById('btn-add-new').addEventListener('click', openAddModal);
+            document.getElementById('btn-edit').addEventListener('click', () => openEditModal(currentItem));
+            document.getElementById('btn-delete').addEventListener('click', openDeleteConfirm);
+            document.getElementById('btn-cancel-edit').addEventListener('click', closeEditModal);
+            document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteConfirm);
+            document.getElementById('btn-confirm-delete').addEventListener('click', performDelete);
+            document.getElementById('edit-form').addEventListener('submit', performSave);
+
+            // Bấm ra ngoài modal để đóng
+            document.getElementById('edit-modal').addEventListener('click', function(e) {
+                if (e.target === this) closeEditModal();
+            });
+            document.getElementById('confirm-modal').addEventListener('click', function(e) {
+                if (e.target === this) closeDeleteConfirm();
+            });
+        });
+
+        function loadData() {
+            showStatus("Đang kết nối cơ sở dữ liệu...");
             fetch(GAS_API_URL)
                 .then(response => response.json())
                 .then(data => onDatabaseLoadSuccess(data))
                 .catch(err => onDatabaseLoadFailure(err));
-        });
-        
+        }
+
         function onDatabaseLoadSuccess(data) {
-            if(data.error) {
+            if (data && data.error) {
                 showStatus("Lỗi cấu hình bảng tính: " + data.error);
                 return;
             }
-            dbData = data;
-            
-            const btnContainer = document.getElementById('buttons-container');
-            btnContainer.innerHTML = ""; 
-            
-            // Tự động tạo nút bấm tương ứng
-            dbData.forEach(item => {
-                if(item.product_name) {
-                    let btn = document.createElement('button');
-                    btn.className = 'product-btn';
-                    btn.innerText = item.product_name;
-                    
-                    btn.addEventListener('click', function() {
-                        selectProduct(item, btn);
-                    });
-                    
-                    btnContainer.appendChild(btn);
-                }
-            });
-            
+            dbData = data || [];
+            renderButtons();
             showStatus("Dữ liệu món đã sẵn sàng.");
-            setTimeout(() => { document.getElementById('loading-status').style.display = 'none'; }, 1000);
+            setTimeout(() => { document.getElementById('loading-status').style.display = 'none'; }, 800);
         }
-        
+
         function onDatabaseLoadFailure(err) {
             showStatus("Lỗi tải dữ liệu! Vui lòng kiểm tra mạng hoặc API.");
             console.error(err);
         }
-        
+
         function showStatus(msg) {
-            document.getElementById('loading-status').innerText = msg;
-            document.getElementById('loading-status').style.display = 'block';
+            const el = document.getElementById('loading-status');
+            el.innerText = msg;
+            el.style.display = 'block';
         }
-        
+
+        function renderButtons() {
+            const btnContainer = document.getElementById('buttons-container');
+            const q = document.getElementById('search-input').value.trim().toLowerCase();
+            btnContainer.innerHTML = "";
+
+            const filtered = dbData.filter(item =>
+                item.product_name && item.product_name.toLowerCase().includes(q)
+            );
+
+            if (filtered.length === 0) {
+                const hint = document.createElement('div');
+                hint.className = 'empty-hint';
+                hint.innerText = dbData.length === 0 ? "Chưa có món nào. Bấm + để thêm." : "Không tìm thấy món phù hợp.";
+                btnContainer.appendChild(hint);
+                return;
+            }
+
+            filtered.forEach(item => {
+                let btn = document.createElement('button');
+                btn.className = 'product-btn';
+                btn.innerText = item.product_name;
+                if (currentItem && currentItem.row_id === item.row_id) btn.classList.add('active');
+
+                btn.addEventListener('click', function() {
+                    selectProduct(item, btn);
+                });
+
+                btnContainer.appendChild(btn);
+            });
+        }
+
         // Hàm hiển thị dữ liệu khi click món nước
         function selectProduct(match, clickedBtn) {
+            currentItem = match;
+
             const allButtons = document.querySelectorAll('.product-btn');
             allButtons.forEach(btn => btn.classList.remove('active'));
-            clickedBtn.classList.add('active');
-            
+            if (clickedBtn) clickedBtn.classList.add('active');
+
             document.getElementById('view-product_name').innerText = match.product_name || "-";
             document.getElementById('view-category').innerText = match.category || "-";
             document.getElementById('view-base_tea').innerText = match.base_tea || "-";
@@ -360,11 +666,131 @@
             document.getElementById('view-default_topping').innerText = match.default_topping || "Không có.";
             document.getElementById('view-shelf_life_base').innerText = match.shelf_life_base || "-";
             document.getElementById('view-shelf_life_osc').innerText = match.shelf_life_osc || "-";
-            
+
             const resultCard = document.getElementById('recipe-result');
             resultCard.style.display = 'block';
-            
+
             resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // ---------- THÊM MỚI / CHỈNH SỬA ----------
+        function openAddModal() {
+            editingItem = null;
+            document.getElementById('modal-title').innerText = "Thêm món mới";
+            FIELDS.forEach(f => document.getElementById('f-' + f).value = "");
+            document.getElementById('edit-modal').classList.add('open');
+        }
+
+        function openEditModal(item) {
+            if (!item) return;
+            editingItem = item;
+            document.getElementById('modal-title').innerText = "Chỉnh sửa công thức";
+            FIELDS.forEach(f => document.getElementById('f-' + f).value = item[f] || "");
+            document.getElementById('edit-modal').classList.add('open');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.remove('open');
+        }
+
+        function performSave(e) {
+            e.preventDefault();
+            const payload = {};
+            FIELDS.forEach(f => payload[f] = document.getElementById('f-' + f).value.trim());
+
+            if (!payload.product_name) {
+                showToast("Vui lòng nhập tên món.", true);
+                return;
+            }
+
+            const saveBtn = document.getElementById('btn-save-edit');
+            saveBtn.disabled = true;
+            saveBtn.innerText = "Đang lưu...";
+
+            const body = editingItem
+                ? { action: "update", row_id: editingItem.row_id, fields: payload }
+                : { action: "add", fields: payload };
+
+            fetch(GAS_API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(body)
+            })
+            .then(res => res.json())
+            .then(res => {
+                saveBtn.disabled = false;
+                saveBtn.innerText = "Lưu";
+                if (res && res.success) {
+                    showToast(editingItem ? "Đã cập nhật công thức." : "Đã thêm món mới.");
+                    closeEditModal();
+                    loadData();
+                    if (editingItem) currentItem = null;
+                    document.getElementById('recipe-result').style.display = 'none';
+                } else {
+                    showToast((res && res.error) || "Lưu thất bại.", true);
+                }
+            })
+            .catch(err => {
+                saveBtn.disabled = false;
+                saveBtn.innerText = "Lưu";
+                showToast("Lỗi kết nối khi lưu.", true);
+                console.error(err);
+            });
+        }
+
+        // ---------- XOÁ ----------
+        function openDeleteConfirm() {
+            if (!currentItem) return;
+            document.getElementById('confirm-text').innerText =
+                `Bạn có chắc muốn xoá "${currentItem.product_name}"? Hành động này không thể hoàn tác.`;
+            document.getElementById('confirm-modal').classList.add('open');
+        }
+
+        function closeDeleteConfirm() {
+            document.getElementById('confirm-modal').classList.remove('open');
+        }
+
+        function performDelete() {
+            if (!currentItem) return;
+            const btn = document.getElementById('btn-confirm-delete');
+            btn.disabled = true;
+            btn.innerText = "Đang xoá...";
+
+            fetch(GAS_API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ action: "delete", row_id: currentItem.row_id })
+            })
+            .then(res => res.json())
+            .then(res => {
+                btn.disabled = false;
+                btn.innerText = "Xoá";
+                if (res && res.success) {
+                    showToast("Đã xoá công thức.");
+                    closeDeleteConfirm();
+                    document.getElementById('recipe-result').style.display = 'none';
+                    currentItem = null;
+                    loadData();
+                } else {
+                    showToast((res && res.error) || "Xoá thất bại.", true);
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerText = "Xoá";
+                showToast("Lỗi kết nối khi xoá.", true);
+                console.error(err);
+            });
+        }
+
+        // ---------- TOAST ----------
+        let toastTimer = null;
+        function showToast(msg, isError) {
+            const el = document.getElementById('toast');
+            el.innerText = msg;
+            el.className = 'toast show' + (isError ? ' error' : '');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => { el.className = 'toast'; }, 2800);
         }
     </script>
 </body>
