@@ -522,6 +522,8 @@ render();})();</script><script>
   var CONTCUT = /\s*(vào|trong|ra khỏi|nằm trong|ngang mặt|bằng)\s+(ca|hộp|bình|jug|thùng|thau)\b(?:(?!\.\s)[^+;,])*/gi;
   function itemsOf(st) {
     return (st.items || []).map(strip).map(function (t) {
+      var lv = /^(Đổ|Cho|Rót)\s+(.+?)\s+(?:tới|đến)\s+[^()]*\(([\d.,]+\s*ml)\)/i.exec(t.replace(/[“”"]/g, ""));
+      if (lv) t = lv[1] + " " + lv[3] + " " + lv[2];
       return t.replace(CONTCUT, "").replace(/[\s,.:]+$/, "").replace(/\s+/g, " ").trim();
     }).filter(function (t) { return t && t.length <= 110 && /\d/.test(t) && !SKIP.test(t) && !CONT.test(t); });
   }
@@ -675,7 +677,8 @@ render();})();</script><script>
   function makeExam(R, o) {
     o = o || {};
     var avoid = o.avoid || {}, recent = o.recent || {}, N = o.n || 15, cand = [];
-    R.forEach(function (r) { cand = cand.concat(qLevels(r), qFormula(r), qSizes(r)); });
+    var STOPPED = /trà ổi hồng|trà mãng cầu|cold brew dâu/i;
+    R.forEach(function (r) { if (STOPPED.test(r.name)) return; cand = cand.concat(qLevels(r), qFormula(r), qSizes(r)); });
     var seenQ = {};
     cand = cand.filter(function (c) { var k = norm(c.q); if (seenQ[k]) return false; seenQ[k] = 1; return true; });
     // tỉ lệ đề: 3 mức trên ly · 8 công thức · 2 shot cà phê · 2 pump đường
