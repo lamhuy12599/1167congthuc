@@ -517,10 +517,13 @@ render();})();</script><script>
     if (/^bán thành phẩm /i.test(n)) return "Công thức pha " + n.charAt(0).toLowerCase() + n.slice(1) + " là:";
     return "Công thức " + n + ":";
   }
-  var SKIP = /HSD|hạn sử dụng|hạn dùng|^lưu ý|tag |lắc đều|bảo quản|ly giấy|vạch|miệng ly|đầy ly|số 7|eleven/i;
+  var SKIP = /HSD|hạn sử dụng|hạn dùng|^lưu ý|tag |lắc đều|bảo quản|ly giấy|vạch|miệng ly|đầy ly|số 7|eleven|bấm nút|hand-mixer|thìa bar/i;
+  var CONT = /(^|\s)(ca(?!\s*đá)|hộp|bình|jug|thùng|thau)(\s|$|[.,+;)])/i;
+  var CONTCUT = /\s*(vào|trong|ra khỏi|nằm trong|ngang mặt|bằng)\s+(ca|hộp|bình|jug|thùng|thau)\b(?:(?!\.\s)[^+;,])*/gi;
   function itemsOf(st) {
-    return (st.items || []).map(strip).map(function (t) { return t.replace(/[.\s]+$/, ""); })
-      .filter(function (t) { return t && t.length <= 110 && /\d/.test(t) && !SKIP.test(t); });
+    return (st.items || []).map(strip).map(function (t) {
+      return t.replace(CONTCUT, "").replace(/[\s,.:]+$/, "").replace(/\s+/g, " ").trim();
+    }).filter(function (t) { return t && t.length <= 110 && /\d/.test(t) && !SKIP.test(t) && !CONT.test(t); });
   }
   function qFormula(r) {
     var out = [], all = [];
@@ -825,15 +828,15 @@ function openQuiz(){
     var right=0;Q.forEach(function(q,i){if(answers[i]===q.a)right++});
     var rows=Q.map(function(q,i){
       var ok=answers[i]===q.a;
-      return '<div class="q '+(ok?'ok':'no')+'"><div class="qt"><b>Câu '+(i+1)+'.</b> '+esc(q.q)+' <span class="tag">'+(ok?'ĐÚNG':'SAI')+'</span></div>'+
-        (ok?'':'<div class="a bad">Đã chọn: '+esc(q.opts[answers[i]])+'</div>')+
-        '<div class="a good">Đáp án đúng: '+esc(q.opts[q.a])+'</div></div>';
+      return '<div class="q '+(ok?'ok':'no')+'"><div class="qt"><b>'+(i+1)+'.</b> '+esc(q.q)+' <span class="tag">'+(ok?'ĐÚNG':'SAI')+'</span></div>'+
+        (ok?'':'<div class="a bad">✗ Đã chọn: '+esc(q.opts[answers[i]])+'</div>')+
+        '<div class="a good">✓ '+esc(q.opts[q.a])+'</div></div>';
     }).join("");
-    var css='body{font-family:"Be Vietnam Pro","Segoe UI",Roboto,Arial,sans-serif;color:#222;margin:0;padding:24px;font-size:13px;line-height:1.5}'+
-      'h1{font-size:20px;margin:0 0 4px}.meta{color:#555;margin-bottom:14px}.score{font-size:22px;font-weight:700;margin:6px 0 16px}'+
-      '.q{border:1px solid #ddd;border-left:5px solid #0b6b4d;border-radius:8px;padding:8px 12px;margin-bottom:8px;page-break-inside:avoid;break-inside:avoid}'+
-      '.q.no{border-left-color:#b8261b}.qt{margin-bottom:4px}.tag{float:right;font-size:11px;font-weight:700}.ok .tag{color:#0b6b4d}.no .tag{color:#b8261b}'+
-      '.a{padding:2px 0}.good{color:#0b6b4d}.bad{color:#b8261b}@page{size:A4;margin:14mm}';
+    var css='*{box-sizing:border-box}body{font-family:"Be Vietnam Pro","Segoe UI",Roboto,Arial,sans-serif;color:#222;margin:0;padding:0;font-size:9px;line-height:1.28}'+
+      'h1{font-size:13px;margin:0 0 2px}.meta{color:#555;margin-bottom:2px}.score{font-size:12px;font-weight:700;margin:0 0 5px}'+
+      '.q{border-left:3px solid #0b6b4d;padding:2px 6px;margin-bottom:3px;background:#f6faf8;break-inside:avoid;page-break-inside:avoid}'+
+      '.q.no{border-left-color:#b8261b;background:#fdf4f3}.qt{font-weight:600}.tag{float:right;font-size:8px;font-weight:700}.ok .tag{color:#0b6b4d}.no .tag{color:#b8261b}'+
+      '.a{padding-left:2px}.good{color:#0b6b4d}.bad{color:#b8261b}@page{size:A4;margin:10mm}';
     return '<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>'+esc(pdfName())+'</title><style>'+css+'</style></head><body>'+
       '<h1>Kết quả bài kiểm tra công thức - 7-Eleven</h1><div class="meta">Nhân viên: <b>'+esc(name)+'</b> · Nộp lúc: '+esc(lastWhen)+' · Mã đề: '+esc($("#qBadge").textContent.replace("MÃ ĐỀ ",""))+'</div>'+
       '<div class="score">'+right+'/'+N+' câu đúng ('+(N-right)+' câu sai)</div>'+rows+'</body></html>';
@@ -845,13 +848,13 @@ function openQuiz(){
   }
   $("#savePdf").addEventListener("click",function(){
     var f=document.createElement("iframe");
-    f.style.cssText="position:fixed;left:-9999px;top:0;width:800px;height:600px;border:0";
+    f.style.cssText="position:fixed;left:-9999px;top:0;width:718px;height:1047px;border:0";
     document.body.appendChild(f);
     var d=f.contentWindow.document;d.open();d.write(pdfHtml());d.close();
     var oldT=document.title;document.title=pdfName();
     var done=function(){document.title=oldT;setTimeout(function(){if(f.parentNode)f.parentNode.removeChild(f)},500)};
     setTimeout(function(){
-      try{f.contentWindow.focus();f.contentWindow.onafterprint=done;f.contentWindow.print()}catch(e){done()}
+      try{var bd=f.contentWindow.document.body,sh=bd.scrollHeight;if(sh>1030)bd.style.zoom=(1030/sh).toFixed(3);f.contentWindow.focus();f.contentWindow.onafterprint=done;f.contentWindow.print()}catch(e){done()}
       setTimeout(done,120000);
     },400);
   });
