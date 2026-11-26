@@ -517,7 +517,7 @@ render();})();</script><script>
     if (/^bán thành phẩm /i.test(n)) return "Công thức pha " + n.charAt(0).toLowerCase() + n.slice(1) + " là:";
     return "Công thức " + n + ":";
   }
-  var SKIP = /HSD|hạn sử dụng|hạn dùng|^lưu ý|tag |lắc đều|bảo quản/i;
+  var SKIP = /HSD|hạn sử dụng|hạn dùng|^lưu ý|tag |lắc đều|bảo quản|ly giấy|vạch|miệng ly|đầy ly|số 7|eleven/i;
   function itemsOf(st) {
     return (st.items || []).map(strip).map(function (t) { return t.replace(/[.\s]+$/, ""); })
       .filter(function (t) { return t && t.length <= 110 && /\d/.test(t) && !SKIP.test(t); });
@@ -537,84 +537,49 @@ render();})();</script><script>
   }
   function descOf(q) { return strip(q).replace(/^[\d.,]+\s*(pumps?|shots?|muỗng|ml|g)?\s*/i, "").replace(/^x\s*\d+\s*/i, "").trim(); }
 
-  function shortSize(l) { return String(l).split("·")[0].trim() || l; }
-  function parseCell(txt, st, alt) {
-    var t = strip(txt || "");
-    if (!t || t.charAt(0) === "(" || !/\d/.test(t)) return null;
-    var m = /(\d+(?:[.,]\d+)?)\s*(pumps?|shots?|trái tắc|muỗng(?:\s*\d+\s*ml)?|ml|g)(?![\p{L}])(?:\s*x\s*\d+)?/iu.exec(t);
-    if (!m) return null;
-    var unit = m[2].toLowerCase(), val = m[0].trim();
-    if (/trái tắc/.test(unit)) return { val: val, label: "số trái tắc", disp: val };
-    var ing = (t.slice(0, m.index) + " " + t.slice(m.index + m[0].length))
-      .replace(/ly giấy\s*:|đong|múc|\bpump\b|\([^)]*\)/gi, " ").replace(/[:+]/g, " ").replace(/\s+/g, " ").trim();
-    if (!ing && /pump/.test(unit)) {
-      var it = (st.items || []).map(strip).filter(function (x) { return /syrup|sữa đặc|sốt|sauce/i.test(x); })[0];
-      if (it) ing = it.replace(/\([^)]*\)|\bpump\b/gi, " ").replace(/\s+/g, " ").trim();
-    }
-    if (!ing && /shot/.test(unit)) ing = "cà phê";
-    if (!ing && alt) { var a2 = strip(alt); if (a2 && a2.charAt(0) !== "(" && !/\d/.test(a2)) ing = a2; }
-    if (!ing) return null;
-    ing = ing.toLowerCase();
-    var label = /pump/.test(unit) ? "pump " + ing : /shot/.test(unit) ? "shot " + ing : ing;
-    return { val: val, label: label, disp: /shot/.test(unit) ? val.replace(/shots?/i, function (s) { return s + " " + ing; }) : val + " " + ing };
-  }
-  // các cột định lượng theo size: mỗi cột là một nguyên liệu cụ thể (pump sữa đặc, shot cà phê, ...)
-  function sizeCols(r) {
-    var cols = [];
+  function lowerFirst(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
+  var MARKS = ["vạch trắng trên Eleven", "vạch trắng dưới Eleven", "vạch trắng trên số 7", "vạch trắng dưới số 7"];
+  var MARKRE = /vạch\s*(?:trắng\s*)?(trên|dưới)\s*(số\s*7|eleven)/i, MIENGRE = /cách miệng ly\s*(\d+)\s*cm/i, DAYRE = /đầy ly/i;
+  function levelBits(r) {
+    var o = [];
     r.steps.forEach(function (st) {
-      var rows = (st.sizes || []).filter(function (z) { return z && z[0]; });
-      if (rows.length < 2) return;
-      var shorts = rows.map(function (z) { return shortSize(z[0]); });
-      if (new Set(shorts.map(norm)).size !== shorts.length) return;
-      [1, 2].forEach(function (c) {
-        var cells = rows.map(function (z) { return parseCell(z[c], st, c === 1 ? z[2] : null); });
-        if (cells.some(function (x) { return !x; })) return;
-        if (cells.some(function (x) { return x.label !== cells[0].label; })) return;
-        cols.push({ label: cells[0].label, shorts: shorts, labs: rows.map(function (z) { return z[0]; }), cells: cells });
+      (st.items || []).forEach(function (raw) {
+        var t = strip(raw).replace(/[“”"]/g, "").replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+        if (!t || /ly giấy|đong|^\+|chuẩn bị|ml\b/i.test(t)) return;
+        var best = null;
+        [["mark", MARKRE], ["mieng", MIENGRE], ["day", DAYRE]].forEach(function (x) {
+          var m = x[1].exec(t);
+          if (m && (!best || m.index < best.m.index)) best = { kind: x[0], m: m };
+        });
+        if (!best) return;
+        var action = t.slice(0, best.m.index).replace(/^ly nhựa\s*:\s*/i, "").replace(/[\s,:]*(tới|đến)?[\s,:]*$/i, "").trim();
+        if (!action || action.length > 80) return;
+        var m = best.m, disp;
+        if (best.kind === "mark") disp = "vạch trắng " + m[1].toLowerCase() + " " + (/7/.test(m[2]) ? "số 7" : "Eleven");
+        else if (best.kind === "mieng") disp = "cách miệng ly " + m[1] + "cm";
+        else disp = "đầy ly";
+        o.push({ kind: best.kind, action: action, disp: disp });
       });
     });
-    return cols;
+    return o;
   }
-  function qSizes(r) {
-    var out = [];
-    sizeCols(r).forEach(function (c) {
-      var vals = c.cells.map(function (x) { return x.val; });
-      if (new Set(vals.map(norm)).size < 2) return;
-      var fmt = function (qs) { return c.shorts.map(function (s, i) { return "Size " + s + ": " + qs[i]; }).join(" - "); };
-      var correct = fmt(vals), cands = [], t;
-      for (t = 0; t < 14; t++) { var p = shuffle(vals); if (p.join("|") !== vals.join("|")) cands.push(fmt(p)); }
-      for (t = 0; t < 14; t++) {
-        var i = Math.floor(rnd() * vals.length), alts = mutateText(vals[i], 3), cc = vals.slice();
-        if (!alts.length) continue;
-        cc[i] = pick(alts); cands.push(fmt(cc));
+  function qLevels(r) {
+    var out = [], name = cleanName(r.name);
+    levelBits(r).forEach(function (b, i) {
+      var pool;
+      if (b.kind === "mark") pool = MARKS.filter(function (x) { return x !== b.disp; });
+      else {
+        pool = [1, 2, 3, 4, 5].map(function (n) { return "cách miệng ly " + n + "cm"; }).concat(["đầy ly", "vạch trắng trên số 7"]);
+        pool = pool.filter(function (x) { return x !== b.disp; });
       }
-      var f = finish(correct, cands, function () {
-        var cc = vals.slice(), j = Math.floor(rnd() * cc.length), al = mutateText(cc[j], 3);
-        if (al.length) cc[j] = pick(al);
-        return [fmt(cc)];
-      });
-      if (f) out.push({ type: "sizeall", rid: r.id, key: "SA|" + r.id + "|" + norm(c.label), dup: "SA|" + norm(canonText(correct)) + "|" + norm(c.label),
-        q: "Định lượng " + c.label + " lần lượt cho các size " + c.shorts.join(", ") + " trong món " + cleanName(r.name) + " là:",
-        opts: f.opts, a: f.a });
+      var dis = shuffle(pool).slice(0, 3);
+      if (dis.length < 3) return;
+      var opts = shuffle([b.disp].concat(dis));
+      out.push({ type: b.kind === "mark" ? "level" : "levelm", rid: r.id, key: "L|" + r.id + "|" + i + "|" + norm(b.action),
+        dup: "L|" + norm(name) + "|" + norm(b.action) + "|" + norm(b.disp),
+        q: "Khi pha " + name + ", " + lowerFirst(b.action) + " tới vị trí nào trên ly?", opts: opts, a: opts.indexOf(b.disp) });
     });
     return out;
-  }
-  function qSizeOne(r) {
-    var cols = sizeCols(r);
-    if (!cols.length) return [];
-    var sig = cols[0].shorts.join("|");
-    cols = cols.filter(function (c) { return c.shorts.join("|") === sig; });
-    var shorts = cols[0].shorts;
-    var combos = shorts.map(function (s, k) { return cols.map(function (c) { return c.cells[k].disp; }).join(", "); });
-    if (new Set(combos.map(norm)).size < 2) return [];
-    var idx = Math.floor(rnd() * shorts.length), cor = combos[idx];
-    if (tokensOf(cor).length < 1) return [];
-    var cands = combos.filter(function (x, k) { return k !== idx; });
-    mutateText(cor, 12).forEach(function (m) { cands.push(m); });
-    var f = finish(cor, cands, function () { return mutateText(cor, 12); });
-    if (!f) return [];
-    return [{ type: "sizeone", rid: r.id, key: "S1|" + r.id + "|" + idx, dup: "S1|" + norm(canonText(cor)) + "|" + norm(shorts[idx]),
-      q: "Định lượng cho 1 ly " + cleanName(r.name) + " size " + shorts[idx] + ":", opts: f.opts, a: f.a }];
   }
   function buildPools(R) {
     var fill = {}, qty = {};
@@ -648,14 +613,14 @@ render();})();</script><script>
     var N = o.n || 15, avoid = o.avoid || {}, recent = o.recent || {};
     var P = buildPools(R), cand = [];
     R.forEach(function (r) {
-      cand = cand.concat(qSizes(r), qSizeOne(r), qFormula(r));
+      cand = cand.concat(qLevels(r), qFormula(r));
     });
     var seenQ = {};
     cand = cand.filter(function (c) { var k = norm(c.q); if (seenQ[k]) return false; seenQ[k] = 1; return true; });
     var best = null;
     for (var attempt = 0; attempt < 25; attempt++) {
       var pool = shuffle(cand).sort(function (a, b) { return (avoid[a.key] ? 1 : 0) - (avoid[b.key] ? 1 : 0); });
-      var typeCap = { formula: 7, sizeall: 4, sizeone: 4 }, cnt = {}, per = {}, dups = {}, chosen = [];
+      var typeCap = { formula: 5, level: 8, levelm: 3 }, cnt = {}, per = {}, dups = {}, chosen = [];
       var take = function (relax) {
         pool.forEach(function (c) {
           if (chosen.length >= N || chosen.indexOf(c) >= 0) return;
