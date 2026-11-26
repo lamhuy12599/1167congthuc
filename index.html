@@ -677,8 +677,9 @@ render();})();</script><script>
   function makeExam(R, o) {
     o = o || {};
     var avoid = o.avoid || {}, recent = o.recent || {}, N = o.n || 15, cand = [];
-    var STOPPED = /trà ổi hồng|trà mãng cầu|cold brew dâu/i;
+    var STOPPED = /trà ổi hồng|trà mãng cầu|cold brew dâu|americano nóng/i;
     R.forEach(function (r) { if (STOPPED.test(r.name)) return; cand = cand.concat(qLevels(r), qFormula(r), qSizes(r)); });
+    cand = cand.filter(function (c) { return !/ly giấy/i.test(c.q + " " + c.opts.join(" ")); }); // chỉ giữ công thức ly nhựa
     var seenQ = {};
     cand = cand.filter(function (c) { var k = norm(c.q); if (seenQ[k]) return false; seenQ[k] = 1; return true; });
     // tỉ lệ đề: 3 mức trên ly · 8 công thức · 2 shot cà phê · 2 pump đường
@@ -829,20 +830,39 @@ function openQuiz(){
   
   function pdfHtml(){
     var right=0;Q.forEach(function(q,i){if(answers[i]===q.a)right++});
+    var wrongN=N-right;
+    // Chỉ giữ nội dung ly nhựa: bỏ mọi đoạn "Ly giấy: ..." nếu còn sót
+    var np=function(t){return String(t).replace(/(?:^|\s*[+·;|])\s*ly giấy\s*:[^+·;|]*/gi,"").replace(/^\s*ly nhựa\s*:\s*/i,"").trim()};
     var rows=Q.map(function(q,i){
       var ok=answers[i]===q.a;
-      return '<div class="q '+(ok?'ok':'no')+'"><div class="qt"><b>'+(i+1)+'.</b> '+esc(q.q)+' <span class="tag">'+(ok?'ĐÚNG':'SAI')+'</span></div>'+
-        (ok?'':'<div class="a bad">✗ Đã chọn: '+esc(q.opts[answers[i]])+'</div>')+
-        '<div class="a good">✓ '+esc(q.opts[q.a])+'</div></div>';
+      return '<div class="q '+(ok?'ok':'no')+'"><div class="qt"><span class="n">'+(i+1)+'</span><span class="qx">'+esc(np(q.q))+'</span><span class="tag">'+(ok?'ĐÚNG':'SAI')+'</span></div>'+
+        '<div class="a good"><b>Đáp án đúng:</b> '+esc(np(q.opts[q.a]))+'</div>'+
+        (ok?'':'<div class="a bad"><b>Đã chọn:</b> '+esc(np(q.opts[answers[i]]))+'</div>')+'</div>';
     }).join("");
-    var css='*{box-sizing:border-box}body{font-family:"Be Vietnam Pro","Segoe UI",Roboto,Arial,sans-serif;color:#222;margin:0;padding:0;font-size:9px;line-height:1.28}'+
-      'h1{font-size:13px;margin:0 0 2px}.meta{color:#555;margin-bottom:2px}.score{font-size:12px;font-weight:700;margin:0 0 5px}'+
-      '.q{border-left:3px solid #0b6b4d;padding:2px 6px;margin-bottom:3px;background:#f6faf8;break-inside:avoid;page-break-inside:avoid}'+
-      '.q.no{border-left-color:#b8261b;background:#fdf4f3}.qt{font-weight:600}.tag{float:right;font-size:8px;font-weight:700}.ok .tag{color:#0b6b4d}.no .tag{color:#b8261b}'+
-      '.a{padding-left:2px}.good{color:#0b6b4d}.bad{color:#b8261b}@page{size:A4;margin:10mm}';
+    var css='*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+      '@page{size:A4 portrait;margin:8mm}html,body{margin:0;padding:0}'+
+      'body{font-family:"Be Vietnam Pro","Segoe UI",Roboto,Arial,sans-serif;color:#222;font-size:10px;line-height:1.3;width:194mm;height:281mm;overflow:hidden}'+
+      '.hero{display:flex;align-items:stretch;gap:3mm;margin-bottom:3mm}'+
+      '.who{flex:1;background:#e1f1e8;border:1.5px solid #0b6b4d;border-radius:6px;padding:2.5mm 4mm;min-width:0}'+
+      '.who .k{font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:#0b6b4d;font-weight:700}'+
+      '.who .nm{font-size:23px;font-weight:800;line-height:1.1;color:#12301f;word-break:break-word}'+
+      '.who .mt{font-size:8.5px;color:#4a5a50;margin-top:1mm}'+
+      '.sc{width:46mm;background:#0b6b4d;color:#fff;border-radius:6px;text-align:center;padding:2mm;display:flex;flex-direction:column;justify-content:center}'+
+      '.sc .big{font-size:34px;font-weight:800;line-height:1}.sc .big small{font-size:18px;font-weight:600;opacity:.85}'+
+      '.sc .lb{font-size:9px;font-weight:600;margin-top:1mm}.sc .lb2{font-size:8px;opacity:.85}'+
+      'h1{font-size:11px;margin:0 0 1.5mm;color:#555;font-weight:600}'+
+      '.list{column-count:2;column-gap:3mm}'+
+      '.q{border-left:3px solid #0b6b4d;padding:1mm 2mm;margin:0 0 1.5mm;background:#f6faf8;break-inside:avoid;page-break-inside:avoid}'+
+      '.q.no{border-left-color:#b8261b;background:#fdf4f3}'+
+      '.qt{display:flex;gap:1.5mm;font-weight:600}.n{flex:none;font-weight:800}.qx{flex:1}'+
+      '.tag{flex:none;font-size:.8em;font-weight:800}.ok .tag{color:#0b6b4d}.no .tag{color:#b8261b}'+
+      '.a{padding-left:4mm}.good{color:#0b6b4d}.bad{color:#b8261b}';
     return '<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>'+esc(pdfName())+'</title><style>'+css+'</style></head><body>'+
-      '<h1>Kết quả bài kiểm tra công thức - 7-Eleven</h1><div class="meta">Nhân viên: <b>'+esc(name)+'</b> · Nộp lúc: '+esc(lastWhen)+' · Mã đề: '+esc($("#qBadge").textContent.replace("MÃ ĐỀ ",""))+'</div>'+
-      '<div class="score">'+right+'/'+N+' câu đúng ('+(N-right)+' câu sai)</div>'+rows+'</body></html>';
+      '<h1>Kết quả bài kiểm tra công thức · 7-Eleven</h1>'+
+      '<div class="hero"><div class="who"><div class="k">Nhân viên</div><div class="nm">'+esc(name)+'</div>'+
+      '<div class="mt">Nộp lúc: '+esc(lastWhen)+' · Mã đề: '+esc($("#qBadge").textContent.replace("MÃ ĐỀ ",""))+'</div></div>'+
+      '<div class="sc"><div class="big">'+right+'<small>/'+N+'</small></div><div class="lb">câu đúng</div><div class="lb2">'+wrongN+' câu sai</div></div></div>'+
+      '<div class="list">'+rows+'</div></body></html>';
   }
   function pdfName(){
     var d=new Date(),p=function(n){return String(n).padStart(2,"0")};
@@ -851,13 +871,21 @@ function openQuiz(){
   }
   $("#savePdf").addEventListener("click",function(){
     var f=document.createElement("iframe");
-    f.style.cssText="position:fixed;left:-9999px;top:0;width:718px;height:1047px;border:0";
+    f.style.cssText="position:fixed;left:-9999px;top:0;width:734px;height:1062px;border:0";
     document.body.appendChild(f);
     var d=f.contentWindow.document;d.open();d.write(pdfHtml());d.close();
     var oldT=document.title;document.title=pdfName();
     var done=function(){document.title=oldT;setTimeout(function(){if(f.parentNode)f.parentNode.removeChild(f)},500)};
     setTimeout(function(){
-      try{var bd=f.contentWindow.document.body,sh=bd.scrollHeight;if(sh>1030)bd.style.zoom=(1030/sh).toFixed(3);f.contentWindow.focus();f.contentWindow.onafterprint=done;f.contentWindow.print()}catch(e){done()}
+      try{
+        var dd=f.contentWindow.document,bd=dd.body,list=dd.querySelector(".list");
+        // vùng in A4 trừ lề 8mm: 194mm x 281mm; chọn cỡ chữ lớn nhất mà nội dung vẫn nằm trọn một trang
+        var maxH=bd.clientHeight,fs=13;
+        bd.style.overflow="visible";bd.style.height="auto";
+        for(;fs>5.5;fs-=0.25){bd.style.fontSize=fs+"px";if(bd.scrollHeight<=maxH-4)break}
+        bd.style.height=maxH+"px";bd.style.overflow="hidden";
+        f.contentWindow.focus();f.contentWindow.onafterprint=done;f.contentWindow.print();
+      }catch(e){done()}
       setTimeout(done,120000);
     },400);
   });
