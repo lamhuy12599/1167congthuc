@@ -581,6 +581,67 @@ render();})();</script><script>
     });
     return out;
   }
+  function shortSize(l) { return String(l).split("·")[0].trim() || l; }
+  function parseCell(txt, st, alt) {
+    var t = strip(txt || "");
+    if (!t || t.charAt(0) === "(" || !/\d/.test(t)) return null;
+    var m = /(\d+(?:[.,]\d+)?)\s*(pumps?|shots?|trái tắc|muỗng(?:\s*\d+\s*ml)?|ml|g)(?![\p{L}])(?:\s*x\s*\d+)?/iu.exec(t);
+    if (!m) return null;
+    var unit = m[2].toLowerCase(), val = m[0].trim();
+    if (/trái tắc/.test(unit)) return { val: val, label: "số trái tắc" };
+    var ing = (t.slice(0, m.index) + " " + t.slice(m.index + m[0].length))
+      .replace(/ly giấy\s*:|đong|múc|\bpump\b|\([^)]*\)/gi, " ").replace(/[:+]/g, " ").replace(/\s+/g, " ").trim();
+    if (!ing && /pump/.test(unit)) {
+      var it = (st.items || []).map(strip).filter(function (x) { return /syrup|sữa đặc|sốt|sauce/i.test(x); })[0];
+      if (it) ing = it.replace(/\([^)]*\)|\bpump\b/gi, " ").replace(/\s+/g, " ").trim();
+    }
+    if (!ing && /shot/.test(unit)) ing = "cà phê";
+    if (!ing) return null;
+    ing = ing.toLowerCase();
+    return { val: val, label: /pump/.test(unit) ? "pump " + ing : /shot/.test(unit) ? "shot " + ing : ing };
+  }
+  function sizeCols(r) {
+    var cols = [];
+    r.steps.forEach(function (st) {
+      var rows = (st.sizes || []).filter(function (z) { return z && z[0] && !/ly giấy/i.test(strip(z[1] || "")); });
+      if (rows.length < 2) return;
+      var shorts = rows.map(function (z) { return shortSize(z[0]); });
+      if (new Set(shorts.map(norm)).size !== shorts.length) return;
+      [1, 2].forEach(function (c) {
+        var cells = rows.map(function (z) { return parseCell(z[c], st, c === 1 ? z[2] : null); });
+        if (cells.some(function (x) { return !x; })) return;
+        if (cells.some(function (x) { return x.label !== cells[0].label; })) return;
+        cols.push({ label: cells[0].label, shorts: shorts, cells: cells });
+      });
+    });
+    return cols;
+  }
+  function qSizes(r) {
+    var out = [];
+    sizeCols(r).forEach(function (c) {
+      var type = /^shot cà phê/.test(c.label) ? "shot" : /^pump syrup/.test(c.label) ? "pump" : null;
+      if (!type) return;
+      var vals = c.cells.map(function (x) { return x.val; });
+      if (new Set(vals.map(norm)).size < 2) return;
+      var fmt = function (qs) { return c.shorts.map(function (s, i) { return "Size " + s + ": " + qs[i]; }).join(" - "); };
+      var correct = fmt(vals), cands = [], t;
+      for (t = 0; t < 14; t++) { var p = shuffle(vals); if (p.join("|") !== vals.join("|")) cands.push(fmt(p)); }
+      for (t = 0; t < 14; t++) {
+        var i = Math.floor(rnd() * vals.length), alts = mutateText(vals[i], 3), cc = vals.slice();
+        if (!alts.length) continue;
+        cc[i] = pick(alts); cands.push(fmt(cc));
+      }
+      var f = finish(correct, cands, function () {
+        var cc = vals.slice(), j = Math.floor(rnd() * cc.length), al = mutateText(cc[j], 3);
+        if (al.length) cc[j] = pick(al);
+        return [fmt(cc)];
+      });
+      if (f) out.push({ type: type, rid: r.id, key: "SA|" + r.id + "|" + norm(c.label), dup: "SA|" + norm(canonText(correct)) + "|" + norm(c.label),
+        q: "Định lượng " + c.label + " lần lượt cho các size " + c.shorts.join(", ") + " trong món " + cleanName(r.name) + " là:",
+        opts: f.opts, a: f.a });
+    });
+    return out;
+  }
   function buildPools(R) {
     var fill = {}, qty = {};
     R.forEach(function (r) {
@@ -610,27 +671,41 @@ render();})();</script><script>
 
   function makeExam(R, o) {
     o = o || {};
-    var N = o.n || 15, avoid = o.avoid || {}, recent = o.recent || {};
-    var P = buildPools(R), cand = [];
-    R.forEach(function (r) {
-      cand = cand.concat(qLevels(r), qFormula(r));
-    });
+    var avoid = o.avoid || {}, recent = o.recent || {}, N = o.n || 15, cand = [];
+    R.forEach(function (r) { cand = cand.concat(qLevels(r), qFormula(r), qSizes(r)); });
     var seenQ = {};
     cand = cand.filter(function (c) { var k = norm(c.q); if (seenQ[k]) return false; seenQ[k] = 1; return true; });
+    // tỉ lệ đề: 3 mức trên ly · 8 công thức · 2 shot cà phê · 2 pump đường
+    var quota = [
+      { t: ["level", "levelm"], n: 3, cap: { levelm: 1 } },
+      { t: ["formula"], n: 8 },
+      { t: ["shot"], n: 2 },
+      { t: ["pump"], n: 2 }
+    ];
     var best = null;
     for (var attempt = 0; attempt < 25; attempt++) {
-      var pool = shuffle(cand).sort(function (a, b) { return (avoid[a.key] ? 1 : 0) - (avoid[b.key] ? 1 : 0); });
-      var typeCap = { formula: 5, level: 8, levelm: 3 }, cnt = {}, per = {}, dups = {}, chosen = [];
-      var take = function (relax) {
-        pool.forEach(function (c) {
-          if (chosen.length >= N || chosen.indexOf(c) >= 0) return;
-          if (dups[c.dup]) return;
-          if ((per[c.rid] || 0) >= (relax ? 3 : 1)) return;
-          if ((cnt[c.type] || 0) >= (relax ? 99 : typeCap[c.type])) return;
-          chosen.push(c); dups[c.dup] = 1; cnt[c.type] = (cnt[c.type] || 0) + 1; per[c.rid] = (per[c.rid] || 0) + 1;
-        });
+      var dups = {}, per = {}, chosen = [];
+      var add = function (c, qt, cc) {
+        chosen.push(c); dups[c.dup] = 1; per[c.rid] = (per[c.rid] || 0) + 1; cc[c.type] = (cc[c.type] || 0) + 1;
       };
-      take(false); if (chosen.length < N) take(true);
+      quota.forEach(function (qt) {
+        var pool = shuffle(cand.filter(function (c) { return qt.t.indexOf(c.type) >= 0; }))
+          .sort(function (a, b) { return (avoid[a.key] ? 1 : 0) - (avoid[b.key] ? 1 : 0); });
+        var cc = {}, got = 0;
+        [false, true].forEach(function (relax) {
+          pool.forEach(function (c) {
+            if (got >= qt.n || chosen.indexOf(c) >= 0 || dups[c.dup]) return;
+            if ((per[c.rid] || 0) >= (relax ? 3 : 1)) return;
+            if (qt.cap && qt.cap[c.type] != null && (cc[c.type] || 0) >= qt.cap[c.type]) return;
+            add(c, qt, cc); got++;
+          });
+        });
+      });
+      if (chosen.length < N) {
+        shuffle(cand).forEach(function (c) {
+          if (chosen.length < N && chosen.indexOf(c) < 0 && !dups[c.dup]) { chosen.push(c); dups[c.dup] = 1; }
+        });
+      }
       var sig = chosen.map(function (c) { return c.key + "=" + c.opts.join("|"); }).sort().join("#");
       var h = hashStr(sig).toString(36).toUpperCase();
       best = { chosen: chosen, h: h };
@@ -648,7 +723,7 @@ render();})();</script><script>
 })(typeof window !== "undefined" ? window : globalThis);
 
 (function(){
-var QCSS="\n:host{all:initial;display:block;position:fixed;inset:0;z-index:45;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:#FBF7F1;color:#2A1D14;font-family:\"Be Vietnam Pro\",\"Segoe UI\",system-ui,sans-serif}\n:host([hidden]){display:none!important}\n[hidden]:not([hidden=until-found i]){display:none!important}\nimg{max-width:100%}\n\n/* Giao diện sáng giống trang công thức: nền kem, thẻ trắng bo tròn viền kem, tiêu đề Fraunces, nhấn xanh lá, thanh 3 màu trên đầu. Một cột hẹp như phiếu kiểm tra. */\n:host {\n  --font-body: \"Be Vietnam Pro\", \"Segoe UI\", system-ui, sans-serif;\n  --font-head: \"Fraunces\", Georgia, serif;\n  --bg: #FBF7F1;\n  --panel: #ffffff;\n  --fg: #2A1D14;\n  --fg2: #6F5E50;\n  --line: #EBDFD0;\n  --accent: #0B6B4D;\n  --accent-soft: #E1F1E8;\n  --good: #0B6B4D;\n  --good-bg: #DDF0E6;\n  --bad: #B8261B;\n  --bad-bg: #FBE3E3;\n  --warn: #8A5A14;\n  --warn-bg: #FFF6DC;\n  --warn-line: #EFD9A0;\n  --shadow: 0 10px 22px rgba(42, 29, 20, .07);\n  --herobg: radial-gradient(80% 90% at 8% 0%, #DDF0E6, transparent 60%), radial-gradient(70% 80% at 100% 0%, #FFE6D2, transparent 60%), #FBF7F1;\n  color-scheme: light;\n}\n* { box-sizing: border-box; }\n.qroot {\n  min-height: 100%;\n  padding-top: env(safe-area-inset-top, 0px);\n  padding-bottom: env(safe-area-inset-bottom, 0px);\n  background: var(--bg);\n  color: var(--fg);\n  font-family: var(--font-body);\n  font-size: 16px;\n  line-height: 1.5;\n  -webkit-font-smoothing: antialiased;\n  overflow-x: hidden;\n}\n.qroot::before {\n  content: \"\";\n  position: fixed;\n  inset: 0 0 auto;\n  height: env(safe-area-inset-top, 0px);\n  z-index: 10;\n  background: var(--bg);\n}\nh1, h2, h3 { margin: 0; }\n.wrap {\n  max-width: 680px;\n  margin: 0 auto;\n  padding-left: max(20px, env(safe-area-inset-left, 0px));\n  padding-right: max(20px, env(safe-area-inset-right, 0px));\n}\n.tri { height: 7px; background: linear-gradient(90deg, #f66e22 0 33.3%, #09734f 33.3% 66.6%, #e91926 66.6%); }\n\n.hero { background: var(--herobg); padding: 28px 0 22px; border-bottom: 1px solid var(--line); }\n.kick { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 12px; }\n.kick i { width: 24px; height: 2px; background: var(--accent); display: block; }\n.title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }\nh1 { font-family: var(--font-head); font-size: clamp(30px, 7.5vw, 46px); line-height: 1; letter-spacing: -.01em; font-weight: 700; text-wrap: balance; }\nh1 span { color: var(--accent); }\n.badge { font-size: 13px; font-weight: 800; letter-spacing: .08em; padding: 4px 12px; border-radius: 99px; background: var(--accent); color: #fff; }\n\nmain { padding-top: 22px; padding-bottom: 8px; }\n.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 22px 20px; box-shadow: var(--shadow); }\n.lede { margin: 0 0 4px; color: var(--fg2); line-height: 1.6; }\n.facts { display: flex; margin: 16px 0 20px; border-top: 1px solid var(--line); }\n.fact { flex: 1 1 0; min-width: 0; padding: 14px 12px 4px 0; border-right: 1px solid var(--line); }\n.fact + .fact { padding-left: 14px; }\n.fact:last-child { border-right: none; }\n.fact b { display: block; font-family: var(--font-head); font-size: 23px; line-height: 1.2; font-variant-numeric: tabular-nums; }\n.fact b.sm { font-size: 15px; padding-top: 6px; }\n.fact span { font-size: 11.5px; color: var(--fg2); }\n\nlabel.field { display: block; font-weight: 700; font-size: 14px; margin-bottom: 6px; }\ninput[type=\"text\"] {\n  width: 100%; font: inherit; color: var(--fg); background: #fff;\n  border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-height: 48px;\n}\ninput[type=\"text\"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }\n.err { color: var(--bad); font-size: 14px; font-weight: 600; margin: 8px 0 0; }\n\n.btn {\n  display: inline-flex; align-items: center; justify-content: center;\n  font: 700 15px var(--font-body); min-height: 48px; padding: 0 22px; border-radius: 14px;\n  border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer;\n}\n.btn:active { transform: scale(.98); }\n.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }\n.btn.ghost { background: #fff; color: var(--fg); border-color: var(--line); }\n.btn.block { width: 100%; }\n.start-btn { width: 100%; margin-top: 16px; }\n\n.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; padding: 10px 0 12px; background: rgba(251, 247, 241, .88); -webkit-backdrop-filter: saturate(1.5) blur(14px); backdrop-filter: saturate(1.5) blur(14px); border-bottom: 1px solid var(--line); }\n.bar-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }\n.bar-row .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg2); }\n.bar-row .who b { color: var(--fg); font-weight: 700; }\n.count { font-family: var(--font-head); font-weight: 800; font-size: 17px; color: var(--accent); font-variant-numeric: tabular-nums; }\n.track { height: 6px; border-radius: 3px; background: var(--line); margin-top: 8px; overflow: hidden; }\n.fill { height: 100%; width: 0; background: var(--accent); transition: width .2s ease; }\n\n.q { scroll-margin-top: 96px; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 18px; margin-top: 14px; box-shadow: var(--shadow); }\n.q.missing { border-color: #D9A441; background: var(--warn-bg); }\n.qhead { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }\n.qnum { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--fg); color: var(--bg); font-family: var(--font-head); font-weight: 700; font-size: 13px; display: grid; place-items: center; font-variant-numeric: tabular-nums; }\n.qt { font-family: var(--font-body); font-size: 1.04rem; line-height: 1.4; font-weight: 600; padding-top: 2px; min-width: 0; overflow-wrap: anywhere; }\n.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }\n.opts { display: flex; flex-direction: column; gap: 8px; }\n.opt { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 11px 13px; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; }\n.opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }\n.mark { flex: none; width: 20px; height: 20px; margin-top: 2px; border: 2px solid var(--fg2); border-radius: 50%; }\n.ot { min-width: 0; overflow-wrap: anywhere; font-size: .97rem; }\n.opt.sel { border-color: var(--accent); background: var(--accent-soft); }\n.opt.sel .mark { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 45%, transparent 50%); }\n.opt input:focus-visible ~ .mark { outline: 2px solid var(--accent); outline-offset: 2px; }\n@media (hover: hover) { .opt:hover { border-color: var(--accent); } }\n\n.warn { margin: 16px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-line); font-size: 14px; font-weight: 600; line-height: 1.55; }\n.submit { margin-top: 18px; }\n\n.score-card .who { color: var(--fg2); font-size: 14px; }\n.score-card .who b { color: var(--fg); font-weight: 700; }\n.big { margin-top: 4px; font-family: var(--font-head); font-size: clamp(2.8rem, 13vw, 3.8rem); font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }\n.big small { font-family: var(--font-body); font-size: .34em; font-weight: 600; color: var(--fg2); margin-left: 8px; }\n.rtext { margin: 4px 0 0; font-weight: 600; }\n.actions { display: flex; flex-wrap: wrap; gap: 10px; }\n.rh { font-family: var(--font-head); font-size: 22px; font-weight: 700; margin: 28px 0 0; }\n.wrong { background: var(--panel); border: 1px solid var(--line); border-top: 5px solid var(--bad); border-radius: 16px; padding: 16px 16px 14px; margin-top: 12px; box-shadow: var(--shadow); }\n.wrong .qhead { margin-bottom: 8px; }\n.ans { display: flex; gap: 10px; align-items: flex-start; border-radius: 12px; padding: 10px 12px; margin-top: 8px; }\n.ans .ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-style: normal; font-size: 12px; font-weight: 800; margin-top: 1px; }\n.ans .lab { display: block; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }\n.ans .tx { display: block; overflow-wrap: anywhere; }\n.ans > div { min-width: 0; }\n.ans.bad { background: var(--bad-bg); }\n.ans.bad .ic { background: var(--bad); }\n.ans.bad .lab { color: var(--bad); }\n.ans.good { background: var(--good-bg); }\n.ans.good .ic { background: var(--good); }\n.ans.good .lab { color: var(--good); }\n.allok { margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: var(--good-bg); color: var(--good); font-weight: 700; }\n\nfooter { padding: 36px 0 36px; text-align: center; color: var(--fg2); font-size: 12.5px; line-height: 1.7; }\nfooter .fh { font-family: var(--font-head); font-size: 20px; color: var(--fg); margin-bottom: 6px; }\n\n@media (prefers-reduced-motion: reduce) { .fill { transition: none; } .btn:active { transform: none; } }\n\n.btn.back{display:flex;width:max-content;min-height:36px;padding:0 14px;font-size:13px;margin-bottom:14px}\n.right{background:var(--panel);border:1px solid var(--line);border-top:5px solid var(--good);border-radius:16px;padding:16px 16px 14px;margin-top:12px;box-shadow:var(--shadow)}.right .qhead{margin-bottom:8px}.secbar{margin:26px 0 4px;padding:10px 14px;border-radius:12px;background:var(--good);color:#fff;font-weight:800;letter-spacing:.04em;font-size:13px;text-transform:uppercase}\n",QHTML="<div class=\"qroot\"><div class=\"tri\"><\/div>\n<header class=\"hero\">\n  <div class=\"wrap\">\n    <button class=\"btn ghost back\" type=\"button\" id=\"qBack\">← Trang chủ<\/button>\n    <div class=\"kick\"><i><\/i>Cà phê · Trà · Specialty<\/div>\n    <div class=\"title-row\"><h1>Bài kiểm tra <span>công thức<\/span><\/h1><span class=\"badge\" id=\"qBadge\"><\/span><\/div>\n  <\/div>\n<\/header>\n\n<main class=\"wrap\">\n  <section id=\"start\">\n    <form class=\"panel\" id=\"startForm\" novalidate>\n      <p class=\"lede\">Nhập tên nhân viên rồi bắt đầu làm bài. Sau khi gửi, bạn sẽ thấy tổng kết toàn bộ câu trả lời kèm đáp án đúng.<\/p>\n      <div class=\"facts\">\n        <div class=\"fact\"><b id=\"qN\">15<\/b><span>câu hỏi<\/span><\/div>\n        <div class=\"fact\"><b>4<\/b><span>đáp án mỗi câu<\/span><\/div>\n        <div class=\"fact\"><b>1<\/b><span>đáp án đúng<\/span><\/div>\n      <\/div>\n      <label class=\"field\" for=\"staffName\">Họ và tên nhân viên<\/label>\n      <input type=\"text\" id=\"staffName\" name=\"staffName\" autocomplete=\"name\" placeholder=\"Ví dụ: Nguyễn Văn A\" maxlength=\"60\">\n      <p class=\"err\" id=\"nameErr\" role=\"alert\" hidden>Vui lòng nhập họ và tên trước khi làm bài.<\/p>\n      <button class=\"btn start-btn\" type=\"submit\" id=\"startBtn\">Bắt đầu làm bài<\/button>\n    <\/form>\n  <\/section>\n\n  <section id=\"quiz\" hidden>\n    <div class=\"bar\">\n      <div class=\"bar-row\"><span class=\"who\">Nhân viên: <b id=\"who\"><\/b><\/span><span class=\"count\" id=\"count\">0/15<\/span><\/div>\n      <div class=\"track\" role=\"progressbar\" aria-label=\"Số câu đã trả lời\" aria-valuemin=\"0\" aria-valuemax=\"15\" aria-valuenow=\"0\" id=\"track\"><div class=\"fill\" id=\"fill\"><\/div><\/div>\n    <\/div>\n    <form id=\"quizForm\" novalidate>\n      <div id=\"qlist\"><\/div>\n      <p class=\"warn\" id=\"warn\" role=\"alert\" hidden><\/p>\n      <button class=\"btn block submit\" type=\"submit\" id=\"submitBtn\">Gửi bài<\/button>\n    <\/form>\n  <\/section>\n\n  <section id=\"result\" hidden>\n    <div class=\"panel score-card\">\n      <div class=\"kick\"><i><\/i>Kết quả<\/div>\n      <div class=\"who\">Nhân viên: <b id=\"rName\"><\/b><\/div>\n      <div class=\"big\"><span id=\"rScore\"><\/span><small>câu đúng<\/small><\/div>\n      <p class=\"rtext\" id=\"rText\"><\/p>\n      <div class=\"facts\">\n        <div class=\"fact\"><b id=\"fRight\"><\/b><span>câu đúng<\/span><\/div>\n        <div class=\"fact\"><b id=\"fWrong\"><\/b><span>câu sai<\/span><\/div>\n        <div class=\"fact\"><b class=\"sm\" id=\"rTime\"><\/b><span>nộp lúc<\/span><\/div>\n      <\/div>\n      <div class=\"actions\">\n        <button class=\"btn\" type=\"button\" id=\"retake\">Làm lại bài<\/button>\n        <button class=\"btn ghost\" type=\"button\" id=\"changeStaff\">Đổi nhân viên<\/button>\n      <\/div>\n    <\/div>\n    <div id=\"rList\"><\/div>\n  <\/section>\n<\/main>\n\n<footer><div class=\"wrap\"><div class=\"fh\">Chúc làm bài tốt<\/div>Đáp án dựa trên tài liệu công thức pha chế.<\/div><\/footer>\n\n<\/div>";
+var QCSS="\n:host{all:initial;display:block;position:fixed;inset:0;z-index:45;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:#FBF7F1;color:#2A1D14;font-family:\"Be Vietnam Pro\",\"Segoe UI\",system-ui,sans-serif}\n:host([hidden]){display:none!important}\n[hidden]:not([hidden=until-found i]){display:none!important}\nimg{max-width:100%}\n\n/* Giao diện sáng giống trang công thức: nền kem, thẻ trắng bo tròn viền kem, tiêu đề Fraunces, nhấn xanh lá, thanh 3 màu trên đầu. Một cột hẹp như phiếu kiểm tra. */\n:host {\n  --font-body: \"Be Vietnam Pro\", \"Segoe UI\", system-ui, sans-serif;\n  --font-head: \"Fraunces\", Georgia, serif;\n  --bg: #FBF7F1;\n  --panel: #ffffff;\n  --fg: #2A1D14;\n  --fg2: #6F5E50;\n  --line: #EBDFD0;\n  --accent: #0B6B4D;\n  --accent-soft: #E1F1E8;\n  --good: #0B6B4D;\n  --good-bg: #DDF0E6;\n  --bad: #B8261B;\n  --bad-bg: #FBE3E3;\n  --warn: #8A5A14;\n  --warn-bg: #FFF6DC;\n  --warn-line: #EFD9A0;\n  --shadow: 0 10px 22px rgba(42, 29, 20, .07);\n  --herobg: radial-gradient(80% 90% at 8% 0%, #DDF0E6, transparent 60%), radial-gradient(70% 80% at 100% 0%, #FFE6D2, transparent 60%), #FBF7F1;\n  color-scheme: light;\n}\n* { box-sizing: border-box; }\n.qroot {\n  min-height: 100%;\n  padding-top: env(safe-area-inset-top, 0px);\n  padding-bottom: env(safe-area-inset-bottom, 0px);\n  background: var(--bg);\n  color: var(--fg);\n  font-family: var(--font-body);\n  font-size: 16px;\n  line-height: 1.5;\n  -webkit-font-smoothing: antialiased;\n  overflow-x: hidden;\n}\n.qroot::before {\n  content: \"\";\n  position: fixed;\n  inset: 0 0 auto;\n  height: env(safe-area-inset-top, 0px);\n  z-index: 10;\n  background: var(--bg);\n}\nh1, h2, h3 { margin: 0; }\n.wrap {\n  max-width: 680px;\n  margin: 0 auto;\n  padding-left: max(20px, env(safe-area-inset-left, 0px));\n  padding-right: max(20px, env(safe-area-inset-right, 0px));\n}\n.tri { height: 7px; background: linear-gradient(90deg, #f66e22 0 33.3%, #09734f 33.3% 66.6%, #e91926 66.6%); }\n\n.hero { background: var(--herobg); padding: 28px 0 22px; border-bottom: 1px solid var(--line); }\n.kick { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 12px; }\n.kick i { width: 24px; height: 2px; background: var(--accent); display: block; }\n.title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }\nh1 { font-family: var(--font-head); font-size: clamp(30px, 7.5vw, 46px); line-height: 1; letter-spacing: -.01em; font-weight: 700; text-wrap: balance; }\nh1 span { color: var(--accent); }\n.badge { font-size: 13px; font-weight: 800; letter-spacing: .08em; padding: 4px 12px; border-radius: 99px; background: var(--accent); color: #fff; }\n\nmain { padding-top: 22px; padding-bottom: 8px; }\n.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 22px 20px; box-shadow: var(--shadow); }\n.lede { margin: 0 0 4px; color: var(--fg2); line-height: 1.6; }\n.facts { display: flex; margin: 16px 0 20px; border-top: 1px solid var(--line); }\n.fact { flex: 1 1 0; min-width: 0; padding: 14px 12px 4px 0; border-right: 1px solid var(--line); }\n.fact + .fact { padding-left: 14px; }\n.fact:last-child { border-right: none; }\n.fact b { display: block; font-family: var(--font-head); font-size: 23px; line-height: 1.2; font-variant-numeric: tabular-nums; }\n.fact b.sm { font-size: 15px; padding-top: 6px; }\n.fact span { font-size: 11.5px; color: var(--fg2); }\n\nlabel.field { display: block; font-weight: 700; font-size: 14px; margin-bottom: 6px; }\ninput[type=\"text\"] {\n  width: 100%; font: inherit; color: var(--fg); background: #fff;\n  border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-height: 48px;\n}\ninput[type=\"text\"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }\n.err { color: var(--bad); font-size: 14px; font-weight: 600; margin: 8px 0 0; }\n\n.btn {\n  display: inline-flex; align-items: center; justify-content: center;\n  font: 700 15px var(--font-body); min-height: 48px; padding: 0 22px; border-radius: 14px;\n  border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer;\n}\n.btn:active { transform: scale(.98); }\n.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }\n.btn.ghost { background: #fff; color: var(--fg); border-color: var(--line); }\n.btn.block { width: 100%; }\n.start-btn { width: 100%; margin-top: 16px; }\n\n.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; padding: 10px 0 12px; background: rgba(251, 247, 241, .88); -webkit-backdrop-filter: saturate(1.5) blur(14px); backdrop-filter: saturate(1.5) blur(14px); border-bottom: 1px solid var(--line); }\n.bar-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }\n.bar-row .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg2); }\n.bar-row .who b { color: var(--fg); font-weight: 700; }\n.count { font-family: var(--font-head); font-weight: 800; font-size: 17px; color: var(--accent); font-variant-numeric: tabular-nums; }\n.track { height: 6px; border-radius: 3px; background: var(--line); margin-top: 8px; overflow: hidden; }\n.fill { height: 100%; width: 0; background: var(--accent); transition: width .2s ease; }\n\n.q { scroll-margin-top: 96px; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 18px; margin-top: 14px; box-shadow: var(--shadow); }\n.q.missing { border-color: #D9A441; background: var(--warn-bg); }\n.qhead { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }\n.qnum { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--fg); color: var(--bg); font-family: var(--font-head); font-weight: 700; font-size: 13px; display: grid; place-items: center; font-variant-numeric: tabular-nums; }\n.qt { font-family: var(--font-body); font-size: 1.04rem; line-height: 1.4; font-weight: 600; padding-top: 2px; min-width: 0; overflow-wrap: anywhere; }\n.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }\n.opts { display: flex; flex-direction: column; gap: 8px; }\n.opt { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 11px 13px; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; }\n.opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }\n.mark { flex: none; width: 20px; height: 20px; margin-top: 2px; border: 2px solid var(--fg2); border-radius: 50%; }\n.ot { min-width: 0; overflow-wrap: anywhere; font-size: .97rem; }\n.opt.sel { border-color: var(--accent); background: var(--accent-soft); }\n.opt.sel .mark { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 45%, transparent 50%); }\n.opt input:focus-visible ~ .mark { outline: 2px solid var(--accent); outline-offset: 2px; }\n@media (hover: hover) { .opt:hover { border-color: var(--accent); } }\n\n.warn { margin: 16px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-line); font-size: 14px; font-weight: 600; line-height: 1.55; }\n.submit { margin-top: 18px; }\n\n.score-card .who { color: var(--fg2); font-size: 14px; }\n.score-card .who b { color: var(--fg); font-weight: 700; }\n.big { margin-top: 4px; font-family: var(--font-head); font-size: clamp(2.8rem, 13vw, 3.8rem); font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }\n.big small { font-family: var(--font-body); font-size: .34em; font-weight: 600; color: var(--fg2); margin-left: 8px; }\n.rtext { margin: 4px 0 0; font-weight: 600; }\n.actions { display: flex; flex-wrap: wrap; gap: 10px; }\n.rh { font-family: var(--font-head); font-size: 22px; font-weight: 700; margin: 28px 0 0; }\n.wrong { background: var(--panel); border: 1px solid var(--line); border-top: 5px solid var(--bad); border-radius: 16px; padding: 16px 16px 14px; margin-top: 12px; box-shadow: var(--shadow); }\n.wrong .qhead { margin-bottom: 8px; }\n.ans { display: flex; gap: 10px; align-items: flex-start; border-radius: 12px; padding: 10px 12px; margin-top: 8px; }\n.ans .ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-style: normal; font-size: 12px; font-weight: 800; margin-top: 1px; }\n.ans .lab { display: block; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }\n.ans .tx { display: block; overflow-wrap: anywhere; }\n.ans > div { min-width: 0; }\n.ans.bad { background: var(--bad-bg); }\n.ans.bad .ic { background: var(--bad); }\n.ans.bad .lab { color: var(--bad); }\n.ans.good { background: var(--good-bg); }\n.ans.good .ic { background: var(--good); }\n.ans.good .lab { color: var(--good); }\n.allok { margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: var(--good-bg); color: var(--good); font-weight: 700; }\n\nfooter { padding: 36px 0 36px; text-align: center; color: var(--fg2); font-size: 12.5px; line-height: 1.7; }\nfooter .fh { font-family: var(--font-head); font-size: 20px; color: var(--fg); margin-bottom: 6px; }\n\n@media (prefers-reduced-motion: reduce) { .fill { transition: none; } .btn:active { transform: none; } }\n\n.btn.back{display:flex;width:max-content;min-height:36px;padding:0 14px;font-size:13px;margin-bottom:14px}\n.right{background:var(--panel);border:1px solid var(--line);border-top:5px solid var(--good);border-radius:16px;padding:16px 16px 14px;margin-top:12px;box-shadow:var(--shadow)}.right .qhead{margin-bottom:8px}.secbar{margin:26px 0 4px;padding:10px 14px;border-radius:12px;background:var(--good);color:#fff;font-weight:800;letter-spacing:.04em;font-size:13px;text-transform:uppercase}\n",QHTML="<div class=\"qroot\"><div class=\"tri\"><\/div>\n<header class=\"hero\">\n  <div class=\"wrap\">\n    <button class=\"btn ghost back\" type=\"button\" id=\"qBack\">← Trang chủ<\/button>\n    <div class=\"kick\"><i><\/i>Cà phê · Trà · Specialty<\/div>\n    <div class=\"title-row\"><h1>Bài kiểm tra <span>công thức<\/span><\/h1><span class=\"badge\" id=\"qBadge\"><\/span><\/div>\n  <\/div>\n<\/header>\n\n<main class=\"wrap\">\n  <section id=\"start\">\n    <form class=\"panel\" id=\"startForm\" novalidate>\n      <p class=\"lede\">Nhập tên nhân viên rồi bắt đầu làm bài. Sau khi gửi, bạn sẽ thấy tổng kết toàn bộ câu trả lời kèm đáp án đúng.<\/p>\n      <div class=\"facts\">\n        <div class=\"fact\"><b id=\"qN\">15<\/b><span>câu hỏi<\/span><\/div>\n        <div class=\"fact\"><b>4<\/b><span>đáp án mỗi câu<\/span><\/div>\n        <div class=\"fact\"><b>1<\/b><span>đáp án đúng<\/span><\/div>\n      <\/div>\n      <label class=\"field\" for=\"staffName\">Họ và tên nhân viên<\/label>\n      <input type=\"text\" id=\"staffName\" name=\"staffName\" autocomplete=\"name\" placeholder=\"Ví dụ: Nguyễn Văn A\" maxlength=\"60\">\n      <p class=\"err\" id=\"nameErr\" role=\"alert\" hidden>Vui lòng nhập họ và tên trước khi làm bài.<\/p>\n      <button class=\"btn start-btn\" type=\"submit\" id=\"startBtn\">Bắt đầu làm bài<\/button>\n    <\/form>\n  <\/section>\n\n  <section id=\"quiz\" hidden>\n    <div class=\"bar\">\n      <div class=\"bar-row\"><span class=\"who\">Nhân viên: <b id=\"who\"><\/b><\/span><span class=\"count\" id=\"count\">0/15<\/span><\/div>\n      <div class=\"track\" role=\"progressbar\" aria-label=\"Số câu đã trả lời\" aria-valuemin=\"0\" aria-valuemax=\"15\" aria-valuenow=\"0\" id=\"track\"><div class=\"fill\" id=\"fill\"><\/div><\/div>\n    <\/div>\n    <form id=\"quizForm\" novalidate>\n      <div id=\"qlist\"><\/div>\n      <p class=\"warn\" id=\"warn\" role=\"alert\" hidden><\/p>\n      <button class=\"btn block submit\" type=\"submit\" id=\"submitBtn\">Gửi bài<\/button>\n    <\/form>\n  <\/section>\n\n  <section id=\"result\" hidden>\n    <div class=\"panel score-card\">\n      <div class=\"kick\"><i><\/i>Kết quả<\/div>\n      <div class=\"who\">Nhân viên: <b id=\"rName\"><\/b><\/div>\n      <div class=\"big\"><span id=\"rScore\"><\/span><small>câu đúng<\/small><\/div>\n      <p class=\"rtext\" id=\"rText\"><\/p>\n      <div class=\"facts\">\n        <div class=\"fact\"><b id=\"fRight\"><\/b><span>câu đúng<\/span><\/div>\n        <div class=\"fact\"><b id=\"fWrong\"><\/b><span>câu sai<\/span><\/div>\n        <div class=\"fact\"><b class=\"sm\" id=\"rTime\"><\/b><span>nộp lúc<\/span><\/div>\n      <\/div>\n      <div class=\"actions\">\n        <button class=\"btn\" type=\"button\" id=\"savePdf\">Lưu kết quả (PDF)<\/button>\n        <button class=\"btn\" type=\"button\" id=\"retake\">Làm lại bài<\/button>\n        <button class=\"btn ghost\" type=\"button\" id=\"changeStaff\">Đổi nhân viên<\/button>\n      <\/div>\n    <\/div>\n    <div id=\"rList\"><\/div>\n  <\/section>\n<\/main>\n\n<footer><div class=\"wrap\"><div class=\"fh\">Chúc làm bài tốt<\/div>Đáp án dựa trên tài liệu công thức pha chế.<\/div><\/footer>\n\n<\/div>";
 var host=document.createElement("div");host.id="quizHost";host.hidden=true;document.body.appendChild(host);
 var sr=host.attachShadow({mode:"open"});
 var HK="7e-quiz-hist";
@@ -665,7 +740,7 @@ function openQuiz(){
   var $=function(s){return sr.querySelector(s)};
   var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
   var views={start:$("#start"),quiz:$("#quiz"),result:$("#result")};
-  var Q=[],N=0,name="",order=[],answers=[];
+  var Q=[],N=0,name="",order=[],answers=[],lastWhen="";
   function show(k){for(var v in views)views[v].hidden=(v!==k);host.scrollTop=0}
   function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t}return b}
   function setExam(){
@@ -706,7 +781,7 @@ function openQuiz(){
     $("#rText").textContent=wrong.length?"Sai "+wrong.length+" câu. Tổng kết toàn bộ đáp án đúng ở bên dưới.":"Đúng cả "+N+" câu. Tổng kết toàn bộ đáp án ở bên dưới.";
     var now=new Date(),when="";
     try{when=now.toLocaleString("vi-VN",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit",year:"numeric"})}catch(e){when=now.toString()}
-    $("#rTime").textContent=when;
+    $("#rTime").textContent=when;lastWhen=when;
     var h="";
     h+='<h2 class="rh">Tổng kết đáp án ('+N+' câu)</h2>';
     Q.forEach(function(q,i){
@@ -744,6 +819,41 @@ function openQuiz(){
       w.hidden=false;$("#q-"+missing[0]).scrollIntoView({behavior:"smooth",block:"start"});return;
     }
     grade();
+  });
+  
+  function pdfHtml(){
+    var right=0;Q.forEach(function(q,i){if(answers[i]===q.a)right++});
+    var rows=Q.map(function(q,i){
+      var ok=answers[i]===q.a;
+      return '<div class="q '+(ok?'ok':'no')+'"><div class="qt"><b>Câu '+(i+1)+'.</b> '+esc(q.q)+' <span class="tag">'+(ok?'ĐÚNG':'SAI')+'</span></div>'+
+        (ok?'':'<div class="a bad">Đã chọn: '+esc(q.opts[answers[i]])+'</div>')+
+        '<div class="a good">Đáp án đúng: '+esc(q.opts[q.a])+'</div></div>';
+    }).join("");
+    var css='body{font-family:"Be Vietnam Pro","Segoe UI",Roboto,Arial,sans-serif;color:#222;margin:0;padding:24px;font-size:13px;line-height:1.5}'+
+      'h1{font-size:20px;margin:0 0 4px}.meta{color:#555;margin-bottom:14px}.score{font-size:22px;font-weight:700;margin:6px 0 16px}'+
+      '.q{border:1px solid #ddd;border-left:5px solid #0b6b4d;border-radius:8px;padding:8px 12px;margin-bottom:8px;page-break-inside:avoid;break-inside:avoid}'+
+      '.q.no{border-left-color:#b8261b}.qt{margin-bottom:4px}.tag{float:right;font-size:11px;font-weight:700}.ok .tag{color:#0b6b4d}.no .tag{color:#b8261b}'+
+      '.a{padding:2px 0}.good{color:#0b6b4d}.bad{color:#b8261b}@page{size:A4;margin:14mm}';
+    return '<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>'+esc(pdfName())+'</title><style>'+css+'</style></head><body>'+
+      '<h1>Kết quả bài kiểm tra công thức - 7-Eleven</h1><div class="meta">Nhân viên: <b>'+esc(name)+'</b> · Nộp lúc: '+esc(lastWhen)+' · Mã đề: '+esc($("#qBadge").textContent.replace("MÃ ĐỀ ",""))+'</div>'+
+      '<div class="score">'+right+'/'+N+' câu đúng ('+(N-right)+' câu sai)</div>'+rows+'</body></html>';
+  }
+  function pdfName(){
+    var d=new Date(),p=function(n){return String(n).padStart(2,"0")};
+    var nm=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/gi,"d").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"");
+    return "KetQua_"+(nm||"NV")+"_"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"_"+p(d.getHours())+p(d.getMinutes());
+  }
+  $("#savePdf").addEventListener("click",function(){
+    var f=document.createElement("iframe");
+    f.style.cssText="position:fixed;left:-9999px;top:0;width:800px;height:600px;border:0";
+    document.body.appendChild(f);
+    var d=f.contentWindow.document;d.open();d.write(pdfHtml());d.close();
+    var oldT=document.title;document.title=pdfName();
+    var done=function(){document.title=oldT;setTimeout(function(){if(f.parentNode)f.parentNode.removeChild(f)},500)};
+    setTimeout(function(){
+      try{f.contentWindow.focus();f.contentWindow.onafterprint=done;f.contentWindow.print()}catch(e){done()}
+      setTimeout(done,120000);
+    },400);
   });
   $("#retake").addEventListener("click",function(){setExam();build();show("quiz")});
   $("#changeStaff").addEventListener("click",function(){
